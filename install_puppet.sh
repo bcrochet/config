@@ -42,10 +42,23 @@ if cat /etc/*release | grep -e "Fedora" &> /dev/null; then
     ln -s /usr/bin/pip /usr/bin/pip-python
 
 elif cat /etc/*release | grep -e "CentOS" -e "Red Hat" &> /dev/null; then
-    rpm -qi epel-release &> /dev/null || rpm -Uvh http://download.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm
-    rpm -ivh http://yum.puppetlabs.com/el/6/products/x86_64/puppetlabs-release-6-6.noarch.rpm
+    if cat /etc/*release | grep -E -e "6\.?" &> /dev/null; then
+        epel_url=http://download.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm
+        puppet_url=http://yum.puppetlabs.com/el/6/products/x86_64/puppetlabs-release-6-6.noarch.rpm
+        puppet_release=6
+    elif cat /etc/*release | grep -E -e "7\.?" &> /dev/null; then
+        epel_url=http://dl.fedoraproject.org/pub/epel/beta/7/x86_64/epel-release-7-0.1.noarch.rpm
+        puppet_url=https://yum.puppetlabs.com/el/7/products/x86_64/puppetlabs-release-7-10.noarch.rpm
+        puppet_release=7
+    else
+        echo "Not a supported RHEL/CentOS platform"
+        exit 1
+    fi
+    rpm -qi epel-release &> /dev/null || rpm -Uvh $epel_url
+    rpm -ivh $puppet_url
 
-    cat > /etc/yum.repos.d/puppetlabs.repo <<"EOF"
+    if cat /etc/*release | grep -E -e "6\.?" &> /dev/null; then
+        cat > /etc/yum.repos.d/puppetlabs.repo <<"EOF"
 [puppetlabs-products]
 name=Puppet Labs Products El 6 - $basearch
 baseurl=http://yum.puppetlabs.com/el/6/products/$basearch
@@ -54,6 +67,17 @@ enabled=1
 gpgcheck=1
 exclude=puppet-2.8* puppet-2.9* puppet-3* facter-2*
 EOF
+    elif cat /etc/*release | grep -E -e "7\.?" &> /dev/null; then
+        cat > /etc/yum.repos.d/puppetlabs.repo <<"EOF"
+[puppetlabs-products]
+name=Puppet Labs Products El 7 - $basearch
+baseurl=http://yum.puppetlabs.com/el/7/products/$basearch
+gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-puppetlabs
+enabled=1
+gpgcheck=1
+exclude=puppet-2.8* puppet-2.9* puppet-3* facter-2*
+EOF
+    fi
 
     yum update -y
     # NOTE: enable the optional-rpms channel (if not already enabled)
@@ -61,6 +85,9 @@ EOF
 
     # NOTE: we preinstall lsb_release to ensure facter sets lsbdistcodename
     yum install -y redhat-lsb-core git puppet
+
+    # NOTE: we remove puppetlabs-release since it later conflicts with rdo-release in devstack
+    yum remove -y puppetlabs-release
 else
     #defaults to Ubuntu
     # NB: keep in sync with openstack_project/files/00-puppet.pref

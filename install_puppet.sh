@@ -44,6 +44,12 @@ function is_rhel6 {
         cat /etc/*release | grep -q 'release 6'
 }
 
+function is_rhel7 {
+    [ -f /usr/bin/yum ] && \
+        cat /etc/*release | grep -q -e "Red Hat" -e "CentOS" && \
+        cat /etc/*release | grep -q 'release 7'
+}
+
 function is_ubuntu {
     [ -f /usr/bin/apt-get ]
 }
@@ -76,9 +82,10 @@ function setup_puppet_fedora {
     ln -s /usr/bin/pip /usr/bin/pip-python
 }
 
-function setup_puppet_rhel6 {
-    local epel_pkg="http://download.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm"
-    local puppet_pkg="http://yum.puppetlabs.com/el/6/products/x86_64/puppetlabs-release-6-6.noarch.rpm"
+function setup_puppet_rhel {
+    local epel_pkg=$1
+    local puppet_pkg=$2
+    local rhel_release=$3
 
     # install EPEL
     rpm -qi epel-release &> /dev/null || rpm -Uvh $epel_pkg
@@ -92,10 +99,10 @@ function setup_puppet_rhel6 {
     rpm -ivh $puppet_pkg
 
     # ensure we stick to supported puppet 2 versions
-    cat > /etc/yum.repos.d/puppetlabs.repo <<"EOF"
+    cat > /etc/yum.repos.d/puppetlabs.repo <<EOF
 [puppetlabs-products]
-name=Puppet Labs Products El 6 - $basearch
-baseurl=http://yum.puppetlabs.com/el/6/products/$basearch
+name=Puppet Labs Products El ${rhel_release} - \$basearch
+baseurl=http://yum.puppetlabs.com/el/${rhel_release}/products/\$basearch
 gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-puppetlabs
 enabled=1
 gpgcheck=1
@@ -106,6 +113,20 @@ EOF
     fi
 
     yum update -y
+}
+
+function setup_puppet_rhel6 {
+    local epel_pkg="http://download.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm"
+    local puppet_pkg="http://yum.puppetlabs.com/el/6/products/x86_64/puppetlabs-release-6-6.noarch.rpm"
+
+    setup_puppet_rhel "$epel_pkg" "$puppet_pkg" "6"
+}
+
+function setup_puppet_rhel7 {
+    local epel_pkg="http://download-i2.fedoraproject.org/pub/epel/beta/7/x86_64/epel-release-7-0.2.noarch.rpm"
+    local puppet_pkg="https://yum.puppetlabs.com/el/7/products/x86_64/puppetlabs-release-7-10.noarch.rpm"
+
+    setup_puppet_rhel "$epel_pkg" "$puppet_pkg" "7"
 }
 
 function setup_puppet_ubuntu {
@@ -191,6 +212,8 @@ if is_fedora; then
     setup_puppet_fedora
 elif is_rhel6; then
     setup_puppet_rhel6
+elif is_rhel7; then
+    setup_puppet_rhel7
 elif is_ubuntu; then
     setup_puppet_ubuntu
 else
